@@ -22,6 +22,7 @@ RUN dnf -y install dnf-plugins-core && \
     # dnf config-manager --set-enabled powertools && \
     dnf -y update
 
+
 # use python38
 RUN dnf -y module disable python36
 RUN dnf -y module enable python38
@@ -29,34 +30,24 @@ RUN dnf -y module enable python38
 # glibc-langpack-en is needed to provide the en_US.UTF-8 locale, which Pulp
 # seems to need.
 #
-# The last 5 lines (before clean) are needed until python3-createrepo_c gets an
-# RPM upgrade to 0.16.2. Until then, we install & build it from PyPI.
-#
-# TODO: Investigate differences between `dnf builddep createrepo_c` vs the list
-# of dependencies below. For example, drpm-devel.
 RUN dnf -y install python38 python38-cryptography python38-devel && \
-    dnf -y install openssl openssl-devel && \
-    dnf -y install openldap-devel && \
-    dnf -y install wget git && \
-    dnf -y install python3-psycopg2 && \
-    dnf -y install redhat-rpm-config gcc cargo libffi-devel && \
-    dnf -y install glibc-langpack-en && \
-    dnf -y install python3-libmodulemd && \
-    dnf -y install python3-libcomps && \
-    dnf -y install libpq-devel && \
-    dnf -y install python3-setuptools && \
-    dnf -y install swig && \
-    dnf -y install buildah --exclude container-selinux && \
-    dnf -y install xz && \
-    dnf -y install libmodulemd-devel && \
-    dnf -y install libcomps-devel && \
-    dnf -y install zchunk-devel && \
-    dnf -y install ninja-build && \
-    dnf -y install cairo-devel cmake gobject-introspection-devel cairo-gobject-devel && \
-    dnf -y install libcurl-devel libxml2-devel sqlite-devel file-devel && \
-    dnf -y install zstd && \
-    dnf -y install doxygen && \
-    dnf -y install graphviz # the dot command
+    dnf -y --setopt=install_weak_deps=False install openssl openssl-devel && \
+    dnf -y --setopt=install_weak_deps=False install openldap-devel && \
+    dnf -y --setopt=install_weak_deps=False install wget git && \
+    dnf -y --setopt=install_weak_deps=False install python3-psycopg2 && \
+    dnf -y --setopt=install_weak_deps=False install python3-createrepo_c && \
+    dnf -y --setopt=install_weak_deps=False install redhat-rpm-config gcc cargo libffi-devel && \
+    dnf -y --setopt=install_weak_deps=False install glibc-langpack-en && \
+    dnf -y --setopt=install_weak_deps=False install libpq-devel && \
+    dnf -y --setopt=install_weak_deps=False install python3-setuptools && \
+    dnf -y --setopt=install_weak_deps=False install xz && \
+    dnf -y --setopt=install_weak_deps=False install libmodulemd-devel && \
+    dnf -y --setopt=install_weak_deps=False install libcomps-devel && \
+    dnf -y --setopt=install_weak_deps=False install zchunk-devel && \
+    dnf -y --setopt=install_weak_deps=False install cmake cairo-gobject-devel && \
+    dnf -y --setopt=install_weak_deps=False install libcurl-devel sqlite-devel file-devel && \
+    dnf -y --setopt=install_weak_deps=False install zstd
+
 RUN dnf clean all
 
 # Needed to prevent the wrong version of cryptography from being installed,
@@ -80,7 +71,7 @@ RUN pip3 install --upgrade \
   pulp-rpm && \
   rm -rf /root/.cache/pip
 
-RUN sed 's|^#mount_program|mount_program|g' -i /etc/containers/storage.conf
+# RUN sed 's|^#mount_program|mount_program|g' -i /etc/containers/storage.conf
 
 RUN groupadd -g 700 --system pulp
 RUN useradd -d /var/lib/pulp --system -u 700 -g pulp pulp
