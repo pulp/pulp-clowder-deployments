@@ -125,6 +125,13 @@ objects:
       # For now, it is useful to have the container running. We can run commands on it.
       sleep 9999999999
 
+- apiVersion: operators.coreos.com/v1
+  kind: OperatorGroup
+  metadata:
+    name: pulp-operator-group
+  spec:
+    targetNamespaces:
+    - "${ENV_NAME}"
 - apiVersion: operators.coreos.com/v1alpha1
   kind: Subscription
   metadata:
