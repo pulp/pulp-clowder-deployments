@@ -107,7 +107,7 @@ objects:
   # namespace: "${ENV_NAME}"
   spec:
     channel: beta
-    installPlanApproval: Automatic
+    installPlanApproval: Manual
     name: pulp-operator
     source: community-operators
     sourceNamespace: openshift-marketplace
