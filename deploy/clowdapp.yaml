@@ -102,6 +102,9 @@ objects:
       kind: Ingress
       metadata:
         name: pulp-content-ingress
+        annotations:
+          route.openshift.io/termination: edge
+          cert-manager.io/cluster-issuer: letsencrypt-http
       spec:
         rules:
           - host: "${HOST}"
@@ -116,7 +119,7 @@ objects:
                         number: 24816
       EOF
 
-      kubectl patch pulp cs-pulp --type='json' -p='[{"op": "replace", "path": "/spec/pulp_settings/content_origin", "value": "'http://"${HOST}"'"}]'
+      kubectl patch pulp cs-pulp --type='json' -p='[{"op": "replace", "path": "/spec/pulp_settings/content_origin", "value": "'https://"${HOST}"'"}]'
 
       echo "Dummy output so that 'bonfire deploy --set-image-tag' will not choke, it requires this string to be present"
       echo "${IMAGE}:${IMAGE_TAG}"
