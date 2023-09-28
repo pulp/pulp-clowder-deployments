@@ -79,12 +79,15 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 
 
 RUN pip3 install --upgrade \
-  pulpcore~=3.32.0 \
+  git+https://github.com/dkliban/pulpcore.git@print-header \
   pulp-certguard \
   pulp-rpm && \
   rm -rf /root/.cache/pip
 
 RUN sed 's|^#mount_program|mount_program|g' -i /etc/containers/storage.conf
+
+# Patch aiohttp to handle larger headers
+COPY images/assets/worker.py /usr/local/lib64/python3.8/site-packages/aiohttp/worker.py
 
 RUN groupadd -g 700 --system pulp
 RUN useradd -d /var/lib/pulp --system -u 700 -g pulp pulp
