@@ -141,7 +141,7 @@ objects:
     name: pulp-operator
     source: community-operators
     sourceNamespace: openshift-marketplace
-    startingCSV: pulp-operator.v1.0.0-beta.1
+    startingCSV: pulp-operator.v1.0.0-beta.2
     config:
       resources:
         requests:
