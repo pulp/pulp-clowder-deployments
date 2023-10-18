@@ -119,7 +119,17 @@ objects:
                         number: 24816
       EOF
 
-      kubectl patch pulp cs-pulp --type='json' -p='[{"op": "replace", "path": "/spec/pulp_settings/content_origin", "value": "'https://"${HOST}"'"}]'
+      # Sometimes the content_origin is not getting set. We need to check the value and try again if needed.
+      EPHEMERAL_CONTENT_ORIGIN=https://${HOST}
+      while true; do
+        kubectl patch pulp cs-pulp --type='json' -p='[{"op": "replace", "path": "/spec/pulp_settings/content_origin", "value": "'"${EPHEMERAL_CONTENT_ORIGIN}"'"}]'
+        current_value=$(kubectl get pulp cs-pulp -o jsonpath='{.spec.pulp_settings.content_origin}' 2>/dev/null)
+        if [ "$current_value" == "$EPHEMERAL_CONTENT_ORIGIN" ]; then
+          break
+        else:
+          sleep 1
+        fi
+      done
 
       echo "Dummy output so that 'bonfire deploy --set-image-tag' will not choke, it requires this string to be present"
       echo "${IMAGE}:${IMAGE_TAG}"
