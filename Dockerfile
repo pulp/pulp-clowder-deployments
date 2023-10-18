@@ -120,7 +120,4 @@ USER root:root
 RUN chmod 2775 /var/lib/pulp/{scripts,media,tmp,assets}
 RUN chown :root /var/lib/pulp/{scripts,media,tmp,assets}
 
-CMD ["/init"]
-ENTRYPOINT ["/pulp-common-entrypoint.sh"]
-
 EXPOSE 80
