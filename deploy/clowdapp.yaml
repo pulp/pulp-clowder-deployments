@@ -237,7 +237,7 @@ objects:
     image_web_version: latest
     inhibit_version_constraint: true
     telemetry:
-      enabled: false
+      enabled: true
       resource_requirements:
         limits:
           cpu: ${{OTEL_COLLECTOR_CPU_LIMIT}}
