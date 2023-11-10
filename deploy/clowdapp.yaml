@@ -26,6 +26,37 @@ objects:
 - apiVersion: v1
   kind: ConfigMap
   metadata:
+    name: cs-pulp-otel-collector-config
+  data:
+    otel-collector-config: |
+      receivers:
+        otlp:
+          protocols:
+            http:
+              endpoint: "0.0.0.0:4318"
+            grpc:
+              endpoint: "0.0.0.0:4317"
+      exporters:
+        prometheus:
+          endpoint: "0.0.0.0:8889"
+        otlp:
+          endpoint: "http://cs-pulp-otel-collector-svc:4317"
+          tls:
+            insecure: true
+      service:
+        pipelines:
+          metrics:
+            receivers: [otlp]
+            processors: []
+            exporters: [prometheus]
+          traces:
+            receivers: [otlp]
+            processors: []
+            exporters: [otlp]
+
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
     name: cs-config-sh-map
   data:
     config-sh-file: |
@@ -54,47 +85,60 @@ objects:
       #S3_REGION='us-east-1'
       S3_HOSTNAME=$(cat /cdapp/cdappconfig.json | jq -r '.objectStore.hostname')
 
+      DB_HOST=$(cat /cdapp/cdappconfig.json | jq -r '.database.hostname')
+      DB_NAME=$(cat /cdapp/cdappconfig.json | jq -r '.database.name')
+      DB_USER=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminUsername')
+      DB_PASSWORD=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminPassword')
+      
       ENV_NAME=$(cat /cdapp/cdappconfig.json | ./jq -r '.metadata.envName')
 
-      # FIXME: Find out why these 2 `kubectl apply` commands keep getting killed.
-      # It is hard to debug inside the container. OOM could be to blame, but we cannot run `dmesg`.
-      until kubectl apply -f- <<EOF
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: 'content-sources-pulp-s3-for-operator'
-      stringData:
-        s3-access-key-id: $S3_ACCESS_KEY_ID
-        s3-secret-access-key: $S3_SECRET_ACCESS_KEY
-        s3-bucket-name: $S3_BUCKET_NAME
-        s3-endpoint: http://${S3_HOSTNAME}:9000
-        s3-region: east
-      EOF
-      do
-        echo "Trying kubectl apply again"
-        sleep 1
-      done
-      # s3-region: $S3_REGION
-      
-      # https://docs.pulpproject.org/pulp_operator/configuring/cache/#configuring-pulp-operator-to-use-an-external-redis-installation
-      
-      kubectl create secret generic content-sources-pulp-in-memory-db \
-              --from-literal=REDIS_HOST=$(cat /cdapp/cdappconfig.json | jq -r '.inMemoryDb.hostname') \
-              --from-literal=REDIS_PORT=$(cat /cdapp/cdappconfig.json | jq -r '.inMemoryDb.port') \
-              --from-literal=REDIS_PASSWORD=""  \
-              --from-literal=REDIS_DB=""
-      
-      # https://docs.pulpproject.org/pulp_operator/configuring/database/#configuring-pulp-operator-to-use-an-external-postgresql-installation
-      
-      kubectl create secret generic content-sources-pulp-external-database \
-              --from-literal=POSTGRES_HOST=$(cat /cdapp/cdappconfig.json | jq -r '.database.hostname')  \
-              --from-literal=POSTGRES_PORT=5432  \
-              --from-literal=POSTGRES_USERNAME=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminUsername')  \
-              --from-literal=POSTGRES_PASSWORD=$(cat /cdapp/cdappconfig.json | jq -r '.database.adminPassword')  \
-              --from-literal=POSTGRES_DB_NAME=$(cat /cdapp/cdappconfig.json | jq -r '.database.name') \
-              --from-literal=POSTGRES_SSLMODE=disable
-      
       HOST=${ENV_NAME}.apps.c-rh-c-eph.8p0c.p1.openshiftapps.com
+
+      # Generate a db key
+      openssl rand -base64 32 > /tmp/database_fields.symmetric.key
+      kubectl create secret generic cs-pulp-db-fields-encryption --from-file /tmp/database_fields.symmetric.key
+
+      # Create settings.py
+      cat <<EOF > /tmp/settings.py
+      # Auto-generated settings file
+      import secrets
+      
+      DB_ENCRYPTION_KEY = "/etc/pulp/keys/database_fields.symmetric.key"
+      DATABASES = {
+        'default': {
+          'HOST': '$DB_HOST',
+          'ENGINE': 'django.db.backends.postgresql_psycopg2',
+          'NAME': '$DB_NAME',
+          'USER': '$DB_USER',
+          'PASSWORD': '$DB_PASSWORD',
+          'PORT': '5432',
+          'CONN_MAX_AGE': 0,
+          'OPTIONS': { 'sslmode': 'disable' },
+        }
+      }
+      CACHE_ENABLED = True
+      REDIS_HOST =  "$(cat /cdapp/cdappconfig.json | jq -r '.inMemoryDb.hostname')"
+      REDIS_PORT =  "$(cat /cdapp/cdappconfig.json | jq -r '.inMemoryDb.port')"
+      REDIS_PASSWORD = ""
+      AWS_S3_ENDPOINT_URL = "http://${S3_HOSTNAME}:9000"
+      AWS_S3_REGION_NAME = "east"
+      AWS_ACCESS_KEY_ID = '$S3_ACCESS_KEY_ID'
+      AWS_SECRET_ACCESS_KEY = '$S3_SECRET_ACCESS_KEY'
+      AWS_STORAGE_BUCKET_NAME = '$S3_BUCKET_NAME'
+      AWS_DEFAULT_ACL = "@none None"
+      S3_USE_SIGV4 = True
+      AWS_S3_SIGNATURE_VERSION = "s3v4"
+      AWS_S3_ADDRESSING_STYLE = "path"
+      DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+      MEDIA_ROOT = ""
+      SECRET_KEY = secrets.token_urlsafe(50)
+      CONTENT_ORIGIN = "https://$HOST"
+      DOMAIN_ENABLED = True
+      REDIS_DB = "1"
+      
+      EOF
+      
+      kubectl create secret generic content-sources-pulp-settings --from-file /tmp/settings.py
 
       # Create an ingress for the content app
       kubectl apply -f- <<EOF
@@ -119,36 +163,6 @@ objects:
                         number: 24816
       EOF
 
-      kubectl patch pulp cs-pulp --type='json' -p='[{"op": "replace", "path": "/spec/pulp_settings/content_origin", "value": "'https://"${HOST}"'"}]'
-
-      echo "Dummy output so that 'bonfire deploy --set-image-tag' will not choke, it requires this string to be present"
-      echo "${IMAGE}:${IMAGE_TAG}"
-
-      # FIXME: Look into having the container/pod run and stop, probably a "job" rather than a "deployment" in the clowdapp.
-      # For now, it is useful to have the container running. We can run commands on it.
-      sleep 9999999999
-
-- apiVersion: operators.coreos.com/v1alpha1
-  kind: Subscription
-  metadata:
-    labels:
-      operators.coreos.com/pulp-operator.pulp: ""
-    name: pulp-operator
-  # namespace: "${ENV_NAME}"
-  spec:
-    channel: beta
-    installPlanApproval: Automatic
-    name: pulp-operator
-    source: community-operators
-    sourceNamespace: openshift-marketplace
-    config:
-      resources:
-        requests:
-          memory: "64Mi"
-          cpu: "250m"
-        limits:
-          memory: "128Mi"
-          cpu: "250m"
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdApp
   metadata:
@@ -159,33 +173,44 @@ objects:
     testing:
       iqePlugin: content-sources
     deployments:
-    - name: app
-      podSpec:
-        # dummy container
-        image: "quay.io/openshift/origin-cli:latest"
-        command: ['bash', '-x', '/tmp/config.sh']
-        volumes:
-        - name: config-sh
-          configMap:
-            name: cs-config-sh-map
-        volumeMounts:
-        - name: config-sh
-          mountPath: /tmp/config.sh
-          subPath: config-sh-file
-    database:
-      name: content-sources-pulp
-      version: 15
-    inMemoryDb: true
-    objectStore:
-      - content-sources-pulp-s3
-- apiVersion: repo-manager.pulpproject.org/v1beta2
-  kind: Pulp
-  metadata:
-    name: cs-pulp
-  spec:
-    api:
+    - name: api
       replicas: ${{PULP_API_REPLICAS}}
-      gunicorn_workers: 1
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'cs-pulp-otel-collector-svc:4317', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
+        volumeMounts:
+        - name: secret-volume
+          mountPath: "/etc/pulp/keys"
+        - name: content-sources-pulp-settings
+          mountPath: "/etc/pulp/settings.py"
+          subPath: "settings.py"
+        volumes:
+          - name: secret-volume
+            secret:
+              secretName: cs-pulp-db-fields-encryption
+          - name: content-sources-pulp-settings
+            secret:
+              secretName: content-sources-pulp-settings
+        initContainers:
+          - name: wait-on-migrations
+            image: ${IMAGE}:${IMAGE_TAG}
+            command: ["/bin/sh"]
+            args:
+              - "-c"
+              - "/usr/bin/wait_on_postgres.py && /usr/bin/wait_on_database_migrations.sh"
+            inheritEnv: True
+        readinessProbe:
+          exec:
+            command: ["/usr/bin/readyz.py","/pulp/api/v3/status/"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /pulp/api/v3/status/
+            port: 24817
+            initialDelaySeconds: 30
+            periodSeconds: 10
       resource_requirements:
         requests:
           cpu: ${{PULP_API_CPU_REQUEST}}
@@ -193,27 +218,78 @@ objects:
         limits:
           cpu: ${{PULP_API_CPU_LIMIT}}
           memory: ${{PULP_API_MEMORY_LIMIT}}
-    content:
+    - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
-      gunicorn_workers: 1
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: [ 'pulpcore-content' ]
+        volumeMounts:
+          - name: secret-volume
+            mountPath: "/etc/pulp/keys"
+          - name: content-sources-pulp-settings
+            mountPath: "/etc/pulp/settings.py"
+            subPath: "settings.py"
+        volumes:
+          - name: secret-volume
+            secret:
+              secretName: cs-pulp-db-fields-encryption
+          - name: content-sources-pulp-settings
+            secret:
+              secretName: content-sources-pulp-settings
+        initContainers:
+          - name: wait-on-migrations
+            image: ${IMAGE}:${IMAGE_TAG}
+            command: [ "/bin/sh" ]
+            args:
+              - "-c"
+              - "/usr/bin/wait_on_postgres.py && /usr/bin/wait_on_database_migrations.sh"
+            inheritEnv: True
+        readinessProbe:
+          exec:
+            command: ["/usr/bin/readyz.py", "/pulp/content/default/"]
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 10
       resource_requirements:
         requests:
           cpu: ${{PULP_CONTENT_CPU_REQUEST}}
           memory: ${{PULP_CONTENT_MEMORY_REQUEST}}
         limits:
-          cpu: ${{PULP_API_CPU_LIMIT}}
+          cpu: ${{PULP_CONTENT_CPU_LIMIT}}
           memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
-    web:
-      replicas: ${{PULP_WEB_REPLICAS}}
-      resource_requirements:
-        requests:
-          cpu: ${{PULP_WEB_CPU_REQUEST}}
-          memory: ${{PULP_WEB_MEMORY_REQUEST}}
-        limits:
-          cpu: ${{PULP_WEB_CPU_LIMIT}}
-          memory: ${{PULP_WEB_MEMORY_LIMIT}}
-    worker:
+    - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
+      podSpec:
+        image: ${IMAGE}:${IMAGE_TAG}
+        command: [ 'pulpcore-worker' ]
+        volumeMounts:
+          - name: secret-volume
+            mountPath: "/etc/pulp/keys"
+          - name: content-sources-pulp-settings
+            mountPath: "/etc/pulp/settings.py"
+            subPath: "settings.py"
+        volumes:
+          - name: secret-volume
+            secret:
+              secretName: cs-pulp-db-fields-encryption
+          - name: content-sources-pulp-settings
+            secret:
+              secretName: content-sources-pulp-settings
+        initContainers:
+          - name: wait-on-migrations
+            image: ${IMAGE}:${IMAGE_TAG}
+            command: [ "/bin/sh" ]
+            args:
+              - "-c"
+              - "/usr/bin/wait_on_postgres.py && /usr/bin/wait_on_database_migrations.sh"
+            inheritEnv: True
+        readinessProbe:
+          exec:
+            command:
+              - "/usr/bin/wait_on_postgres.py"
+          initialDelaySeconds: 3
+          periodSeconds: 10
+          timeoutSeconds: 10
       resource_requirements:
         requests:
           cpu: ${{PULP_WORKER_CPU_REQUEST}}
@@ -221,30 +297,179 @@ objects:
         limits:
           cpu: ${{PULP_WORKER_CPU_LIMIT}}
           memory: ${{PULP_WORKER_MEMORY_LIMIT}}
-    ingress_type: nodeport
-    pulp_settings:
-      domain_enabled: ${{DOMAIN_ENABLED}}
-      redis_db: 1
-      content_origin: ${{CONTENT_ORIGIN}}
-    database:
-      external_db_secret: ${{DB_SECRET_NAME}}
-    cache:
-      enabled: true
-      external_cache_secret: content-sources-pulp-in-memory-db
-    object_storage_s3_secret: content-sources-pulp-s3-for-operator
-    image: ${{IMAGE}}
-    image_version: ${{IMAGE_TAG}}
-    image_web_version: latest
-    inhibit_version_constraint: true
-    telemetry:
-      enabled: true
+    - name: otel-collector
+      replicas: 1
+      podSpec:
+        # dummy container
+        image: "docker.io/otel/opentelemetry-collector"
+        args:
+         - "--config"
+         - "file:/etc/otelcol-contrib/otel-collector-config.yaml"
+        volumes:
+          - name: otel-config
+            configMap:
+              name: cs-pulp-otel-collector-config
+        volumeMounts:
+          - name: otel-config
+            mountPath: /etc/otelcol-contrib/otel-collector-config.yaml
+            subPath: otel-collector-config
       resource_requirements:
-        limits:
-          cpu: ${{OTEL_COLLECTOR_CPU_LIMIT}}
-          memory: ${{OTEL_COLLECTOR_MEMORY_LIMIT}}
         requests:
           cpu: ${{OTEL_COLLECTOR_CPU_REQUEST}}
           memory: ${{OTEL_COLLECTOR_MEMORY_REQUEST}}
+        limits:
+          cpu: ${{OTEL_COLLECTOR_CPU_LIMIT}}
+          memory: ${{OTEL_COLLECTOR_MEMORY_LIMIT}}
+    database:
+      name: content-sources-pulp
+      version: 15
+    inMemoryDb: true
+    objectStore:
+      - content-sources-pulp-s3
+    jobs:
+      - name: create-settings-and-ingress
+        podSpec:
+          image: "quay.io/openshift/origin-cli:latest"
+          command: [ 'bash', '-x', '/tmp/config.sh' ]
+          volumes:
+            - name: config-sh
+              configMap:
+                name: cs-config-sh-map
+          volumeMounts:
+            - name: config-sh
+              mountPath: /tmp/config.sh
+              subPath: config-sh-file
+      - name: migrate-db
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ '/usr/local/bin/pulpcore-manager', 'migrate', '--noinput' ]
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+            - name: content-sources-pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+          volumes:
+            - name: secret-volume
+              secret:
+                secretName: cs-pulp-db-fields-encryption
+            - name: content-sources-pulp-settings
+              secret:
+                secretName: content-sources-pulp-settings
+      - name: cs-pulp-reset-admin-password
+        podSpec:
+          image: ${IMAGE}:${IMAGE_TAG}
+          command: [ '/bin/sh' ]
+          args: ['-c', '/usr/local/bin/pulpcore-manager reset-admin-password --password "$PULP_ADMIN_PASSWORD"' ]
+          env:
+            - name: PULP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cs-pulp-admin-password
+                  key: password
+                  optional: true
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/etc/pulp/keys"
+            - name: content-sources-pulp-settings
+              mountPath: "/etc/pulp/settings.py"
+              subPath: "settings.py"
+          volumes:
+            - name: secret-volume
+              secret:
+                secretName: cs-pulp-db-fields-encryption
+            - name: content-sources-pulp-settings
+              secret:
+                secretName: content-sources-pulp-settings
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: pulp-api
+    name: cs-pulp-api-svc
+  spec:
+    ports:
+      - name: api-24817
+        protocol: TCP
+        port: 24817
+        targetPort: 24817
+    selector:
+      pod: content-sources-pulp-api
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: pulp-content
+    name: cs-pulp-content-svc
+  spec:
+    ports:
+      - name: content-24816
+        protocol: TCP
+        port: 24816
+        targetPort: 24816
+    selector:
+      pod: content-sources-pulp-content
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      otel: ""
+      pulp_cr: cs-pulp
+    name: cs-pulp-otel-collector-svc
+  spec:
+    ports:
+      - name: otel-8889
+        protocol: TCP
+        port: 8889
+        targetPort: 8889
+      - name: otel-4317
+        protocol: TCP
+        port: 4317
+        targetPort: 4317
+      - name: otel-4318
+        protocol: TCP
+        port: 4318
+        targetPort: 4318
+    selector:
+      pod: content-sources-pulp-otel-collector
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: migrations
+  spec:
+    appName: content-sources-pulp
+    runOnNotReady: True
+    jobs:
+      - migrate-db
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: cs-pulp-reset-admin-password
+  spec:
+    appName: content-sources-pulp
+    jobs:
+      - cs-pulp-reset-admin-password
+- apiVersion: cloud.redhat.com/v1alpha1
+  kind: ClowdJobInvocation
+  metadata:
+    name: cs-pulp-create-settings-and-ingress
+  spec:
+    appName: content-sources-pulp
+    runOnNotReady: True
+    jobs:
+      - create-settings-and-ingress
 parameters:
   - name: ENV_NAME
     description: Specify your (ephemeral) namespace
@@ -279,9 +504,6 @@ parameters:
   - name: PULP_WORKER_CPU_REQUEST
     description: Amount of CPU to request for the Worker pods
     value: "250m"
-  - name: PULP_WEB_CPU_REQUEST
-    description: Amount of CPU to request for the nginx pods
-    value: "250m"
   - name: PULP_API_CPU_LIMIT
     description: Limit of CPU use by API pods
     value: "500m"
@@ -290,9 +512,6 @@ parameters:
     value: "500m"
   - name: PULP_WORKER_CPU_LIMIT
     description: Limit of CPU use by Worker pods
-    value: "500m"
-  - name: PULP_WEB_CPU_LIMIT
-    description: Limit of CPU use by nginx pods
     value: "500m"
   - name: PULP_API_MEMORY_REQUEST
     description: Amount of memory to request for API pods
@@ -303,9 +522,6 @@ parameters:
   - name: PULP_WORKER_MEMORY_REQUEST
     description: Amount of memory to request for Worker pods
     value: "256Mi"
-  - name: PULP_WEB_MEMORY_REQUEST
-    description: Amount of memory to request for nginx pods
-    value: "256Mi"
   - name: PULP_API_MEMORY_LIMIT
     description: Limit of memory use by API pods
     value: "512Mi"
@@ -314,9 +530,6 @@ parameters:
     value: "512Mi"
   - name: PULP_WORKER_MEMORY_LIMIT
     description: Limit of memory use by Worker pods
-    value: "512Mi"
-  - name: PULP_WEB_MEMORY_LIMIT
-    description: Limit of memory use by nginx pods
     value: "512Mi"
   - name: OTEL_COLLECTOR_CPU_REQUEST
     description: Amount of CPU to request for OpenTelemetry Collector container
