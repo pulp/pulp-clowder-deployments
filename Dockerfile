@@ -57,9 +57,7 @@ RUN dnf -y install python38 python38-cryptography python38-devel && \
     dnf -y install ninja-build && \
     dnf -y install cairo-devel cmake gobject-introspection-devel cairo-gobject-devel && \
     dnf -y install libcurl-devel libxml2-devel sqlite-devel file-devel && \
-    dnf -y install zstd && \
-    dnf -y install doxygen && \
-    dnf -y install graphviz # the dot command
+    dnf -y install zstd
 RUN dnf clean all
 
 # Needed to prevent the wrong version of cryptography from being installed,
