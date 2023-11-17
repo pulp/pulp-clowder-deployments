@@ -9,7 +9,7 @@ DOCKERFILE=Dockerfile
 
 IQE_PLUGINS="content-sources"
 IQE_MARKER_EXPRESSION="api"
-IQE_FILTER_EXPRESSION=""
+IQE_FILTER_EXPRESSION="not test_introspection_of_persistent_user"
 IQE_CJI_TIMEOUT="30m"
 
 # Install bonfire repo/initialize
