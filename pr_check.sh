@@ -10,7 +10,6 @@ DOCKERFILE=Dockerfile
 IQE_PLUGINS="content-sources"
 IQE_MARKER_EXPRESSION="api"
 IQE_FILTER_EXPRESSION=""
-IQE_ENV="ephemeral"
 IQE_CJI_TIMEOUT="30m"
 
 # Install bonfire repo/initialize
