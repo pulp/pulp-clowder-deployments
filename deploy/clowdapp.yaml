@@ -35,7 +35,7 @@ objects:
       kubectl get secret
       retVal=$?
       echo $retVal
-      if [ $retval -ne 0 ]; then
+      if [ $retVal -ne 0 ]; then
          echo "Stopping here because we are running on the staging environment or we cannot retrieve secrets"
          sleep 9999999999
          exit 0
