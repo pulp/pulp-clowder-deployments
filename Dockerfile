@@ -77,9 +77,8 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 
 
 RUN pip3 install --upgrade \
-  pulpcore \
-  pulp-certguard \
-  pulp-rpm && \
+  pulpcore==3.42.0 \
+  pulp-rpm==3.24.0 && \
   rm -rf /root/.cache/pip
 
 RUN sed 's|^#mount_program|mount_program|g' -i /etc/containers/storage.conf
