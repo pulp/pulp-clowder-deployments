@@ -366,7 +366,7 @@ objects:
                 secretKeyRef:
                   name: cs-pulp-admin-password
                   key: password
-                  optional: true
+                  optional: false
           volumeMounts:
             - name: secret-volume
               mountPath: "/etc/pulp/keys"
