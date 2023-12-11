@@ -68,7 +68,6 @@ objects:
       echo $retVal
       if [ $retVal -ne 0 ]; then
          echo "Stopping here because we are running on the staging environment or we cannot retrieve secrets"
-         sleep 9999999999
          exit 0
       fi
 
@@ -355,7 +354,7 @@ objects:
             - name: content-sources-pulp-settings
               secret:
                 secretName: content-sources-pulp-settings
-      - name: cs-pulp-reset-admin-password
+      - name: reset-admin-password
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ '/bin/sh' ]
