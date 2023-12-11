@@ -300,8 +300,7 @@ objects:
     - name: otel-collector
       replicas: 1
       podSpec:
-        # dummy container
-        image: "docker.io/otel/opentelemetry-collector"
+        image: "quay.io/cloudservices/opentelemetry-collector"
         args:
          - "--config"
          - "file:/etc/otelcol-contrib/otel-collector-config.yaml"
