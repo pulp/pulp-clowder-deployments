@@ -454,11 +454,11 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: cs-pulp-reset-admin-password
+    name: reset-admin-password
   spec:
     appName: content-sources-pulp
     jobs:
-      - cs-pulp-reset-admin-password
+      - reset-admin-password
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
