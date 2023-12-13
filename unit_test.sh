@@ -17,6 +17,10 @@ POD=$(oc get pod | grep -oE "content-sources-pulp-api\S*")
 echo $POD
 oc get pod $POD -o yaml | grep memory:
 
+oc get clowdenvironment env-$(oc project | grep -oE 'ephemeral-......') -o yaml
+
+oc get clowdapp content-sources-pulp -o yaml
+
 ### Adapted from ./.github/workflows/scripts/utils.sh
 # Run a command
 cmd_prefix() {
