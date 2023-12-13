@@ -210,13 +210,13 @@ objects:
             port: 24817
             initialDelaySeconds: 30
             periodSeconds: 10
-      resource_requirements:
-        requests:
-          cpu: ${{PULP_API_CPU_REQUEST}}
-          memory: ${{PULP_API_MEMORY_REQUEST}}
-        limits:
-          cpu: ${{PULP_API_CPU_LIMIT}}
-          memory: ${{PULP_API_MEMORY_LIMIT}}
+        resources:
+          requests:
+            cpu: ${{PULP_API_CPU_REQUEST}}
+            memory: ${{PULP_API_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{PULP_API_CPU_LIMIT}}
+            memory: ${{PULP_API_MEMORY_LIMIT}}
     - name: content
       replicas: ${{PULP_CONTENT_REPLICAS}}
       podSpec:
@@ -249,13 +249,13 @@ objects:
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 10
-      resource_requirements:
-        requests:
-          cpu: ${{PULP_CONTENT_CPU_REQUEST}}
-          memory: ${{PULP_CONTENT_MEMORY_REQUEST}}
-        limits:
-          cpu: ${{PULP_CONTENT_CPU_LIMIT}}
-          memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
+        resources:
+          requests:
+            cpu: ${{PULP_CONTENT_CPU_REQUEST}}
+            memory: ${{PULP_CONTENT_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{PULP_CONTENT_CPU_LIMIT}}
+            memory: ${{PULP_CONTENT_MEMORY_LIMIT}}
     - name: worker
       replicas: ${{PULP_WORKER_REPLICAS}}
       podSpec:
@@ -289,13 +289,13 @@ objects:
           initialDelaySeconds: 3
           periodSeconds: 10
           timeoutSeconds: 10
-      resource_requirements:
-        requests:
-          cpu: ${{PULP_WORKER_CPU_REQUEST}}
-          memory: ${{PULP_WORKER_MEMORY_REQUEST}}
-        limits:
-          cpu: ${{PULP_WORKER_CPU_LIMIT}}
-          memory: ${{PULP_WORKER_MEMORY_LIMIT}}
+        resources:
+          requests:
+            cpu: ${{PULP_WORKER_CPU_REQUEST}}
+            memory: ${{PULP_WORKER_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{PULP_WORKER_CPU_LIMIT}}
+            memory: ${{PULP_WORKER_MEMORY_LIMIT}}
     - name: otel-collector
       replicas: 1
       podSpec:
@@ -311,13 +311,13 @@ objects:
           - name: otel-config
             mountPath: /etc/otelcol-contrib/otel-collector-config.yaml
             subPath: otel-collector-config
-      resource_requirements:
-        requests:
-          cpu: ${{OTEL_COLLECTOR_CPU_REQUEST}}
-          memory: ${{OTEL_COLLECTOR_MEMORY_REQUEST}}
-        limits:
-          cpu: ${{OTEL_COLLECTOR_CPU_LIMIT}}
-          memory: ${{OTEL_COLLECTOR_MEMORY_LIMIT}}
+        resources:
+          requests:
+            cpu: ${{OTEL_COLLECTOR_CPU_REQUEST}}
+            memory: ${{OTEL_COLLECTOR_MEMORY_REQUEST}}
+          limits:
+            cpu: ${{OTEL_COLLECTOR_CPU_LIMIT}}
+            memory: ${{OTEL_COLLECTOR_MEMORY_LIMIT}}
     database:
       name: content-sources-pulp
       version: 15
