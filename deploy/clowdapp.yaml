@@ -337,7 +337,7 @@ objects:
             - name: config-sh
               mountPath: /tmp/config.sh
               subPath: config-sh-file
-      - name: migrate-db
+      - name: migrate-db-12-14-2023
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
           command: [ '/usr/local/bin/pulpcore-manager', 'migrate', '--noinput' ]
@@ -450,7 +450,7 @@ objects:
     appName: content-sources-pulp
     runOnNotReady: True
     jobs:
-      - migrate-db
+      - migrate-db-12-14-2023
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
