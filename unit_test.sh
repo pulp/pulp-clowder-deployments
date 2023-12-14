@@ -39,6 +39,9 @@ cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
 sed "s/password/${PASSWORD}/g" pulp-smash.json > pulp-smash.customized.json
 sed -i "s/cs-pulp-content-svc/env-${NAMESPACE}.apps.c-rh-c-eph.8p0c.p1.openshiftapps.com/g" pulp-smash.customized.json
 
+echo "PULP-SMASH CONFIG:"
+cat pulp-smash.customized.json
+
 ORIG_DIR=$PWD
 if [[ ! -e ../pulp_rpm ]]; then
   git clone --depth=1 https://github.com/pulp/pulp_rpm.git ../pulp_rpm
