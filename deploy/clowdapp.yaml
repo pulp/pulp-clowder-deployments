@@ -1,8 +1,8 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 labels:
-  app: content-sources-pulp
-  template: content-sources-pulp-clowdapp
+  app: pulp
+  template: pulp-clowdapp
 metadata:
   annotations:
     description: |-
@@ -21,12 +21,12 @@ metadata:
     iconClass: icon-python
   labels:
     samples.operator.openshift.io/managed: "false"
-  name: content-sources-pulp-clowdapp
+  name: pulp-clowdapp
 objects:
 - apiVersion: v1
   kind: ConfigMap
   metadata:
-    name: cs-pulp-otel-collector-config
+    name: pulp-otel-collector-config
   data:
     otel-collector-config: |
       receivers:
@@ -40,7 +40,7 @@ objects:
         prometheus:
           endpoint: "0.0.0.0:8889"
         otlp:
-          endpoint: "http://cs-pulp-otel-collector-svc:4317"
+          endpoint: "http://pulp-otel-collector-svc:4317"
           tls:
             insecure: true
       service:
@@ -95,7 +95,7 @@ objects:
 
       # Generate a db key
       openssl rand -base64 32 > /tmp/database_fields.symmetric.key
-      kubectl create secret generic cs-pulp-db-fields-encryption --from-file /tmp/database_fields.symmetric.key
+      kubectl create secret generic pulp-db-fields-encryption --from-file /tmp/database_fields.symmetric.key
 
       # Create settings.py
       cat <<EOF > /tmp/settings.py
@@ -137,7 +137,7 @@ objects:
       
       EOF
       
-      kubectl create secret generic content-sources-pulp-settings --from-file /tmp/settings.py
+      kubectl create secret generic pulp-settings --from-file /tmp/settings.py
 
       # Create an ingress for the content app
       kubectl apply -f- <<EOF
@@ -157,7 +157,7 @@ objects:
                   pathType: Prefix
                   backend:
                     service:
-                      name: cs-pulp-content-svc
+                      name: pulp-content-svc
                       port:
                         number: 24816
       EOF
@@ -165,7 +165,7 @@ objects:
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdApp
   metadata:
-    name: content-sources-pulp
+    name: pulp
   #  namespace: "${ENV_NAME}"
   spec:
     envName: "${ENV_NAME}"
@@ -176,20 +176,20 @@ objects:
       replicas: ${{PULP_API_REPLICAS}}
       podSpec:
         image: ${IMAGE}:${IMAGE_TAG}
-        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'cs-pulp-otel-collector-svc:4317', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
+        command: ['/usr/local/bin/opentelemetry-instrument', '--service_name', 'pulp-api', '--exporter_otlp_endpoint', 'pulp-otel-collector-svc:4317', '--exporter_otlp_insecure', 'true', 'pulpcore-api', '--timeout', '90', '--workers', '1', '--access-logfile', '-']
         volumeMounts:
         - name: secret-volume
           mountPath: "/etc/pulp/keys"
-        - name: content-sources-pulp-settings
+        - name: pulp-settings
           mountPath: "/etc/pulp/settings.py"
           subPath: "settings.py"
         volumes:
           - name: secret-volume
             secret:
-              secretName: cs-pulp-db-fields-encryption
-          - name: content-sources-pulp-settings
+              secretName: pulp-db-fields-encryption
+          - name: pulp-settings
             secret:
-              secretName: content-sources-pulp-settings
+              secretName: pulp-settings
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -225,16 +225,16 @@ objects:
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
-          - name: content-sources-pulp-settings
+          - name: pulp-settings
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
         volumes:
           - name: secret-volume
             secret:
-              secretName: cs-pulp-db-fields-encryption
-          - name: content-sources-pulp-settings
+              secretName: pulp-db-fields-encryption
+          - name: pulp-settings
             secret:
-              secretName: content-sources-pulp-settings
+              secretName: pulp-settings
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -264,16 +264,16 @@ objects:
         volumeMounts:
           - name: secret-volume
             mountPath: "/etc/pulp/keys"
-          - name: content-sources-pulp-settings
+          - name: pulp-settings
             mountPath: "/etc/pulp/settings.py"
             subPath: "settings.py"
         volumes:
           - name: secret-volume
             secret:
-              secretName: cs-pulp-db-fields-encryption
-          - name: content-sources-pulp-settings
+              secretName: pulp-db-fields-encryption
+          - name: pulp-settings
             secret:
-              secretName: content-sources-pulp-settings
+              secretName: pulp-settings
         initContainers:
           - name: wait-on-migrations
             image: ${IMAGE}:${IMAGE_TAG}
@@ -306,7 +306,7 @@ objects:
         volumes:
           - name: otel-config
             configMap:
-              name: cs-pulp-otel-collector-config
+              name: pulp-otel-collector-config
         volumeMounts:
           - name: otel-config
             mountPath: /etc/otelcol-contrib/otel-collector-config.yaml
@@ -319,11 +319,11 @@ objects:
             cpu: ${{OTEL_COLLECTOR_CPU_LIMIT}}
             memory: ${{OTEL_COLLECTOR_MEMORY_LIMIT}}
     database:
-      name: content-sources-pulp
+      name: pulp
       version: 15
     inMemoryDb: true
     objectStore:
-      - content-sources-pulp-s3
+      - pulp-s3
     jobs:
       - name: create-settings-and-ingress
         podSpec:
@@ -344,16 +344,16 @@ objects:
           volumeMounts:
             - name: secret-volume
               mountPath: "/etc/pulp/keys"
-            - name: content-sources-pulp-settings
+            - name: pulp-settings
               mountPath: "/etc/pulp/settings.py"
               subPath: "settings.py"
           volumes:
             - name: secret-volume
               secret:
-                secretName: cs-pulp-db-fields-encryption
-            - name: content-sources-pulp-settings
+                secretName: pulp-db-fields-encryption
+            - name: pulp-settings
               secret:
-                secretName: content-sources-pulp-settings
+                secretName: pulp-settings
       - name: reset-admin-password
         podSpec:
           image: ${IMAGE}:${IMAGE_TAG}
@@ -363,28 +363,28 @@ objects:
             - name: PULP_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: cs-pulp-admin-password
+                  name: pulp-admin-password
                   key: password
                   optional: true
           volumeMounts:
             - name: secret-volume
               mountPath: "/etc/pulp/keys"
-            - name: content-sources-pulp-settings
+            - name: pulp-settings
               mountPath: "/etc/pulp/settings.py"
               subPath: "settings.py"
           volumes:
             - name: secret-volume
               secret:
-                secretName: cs-pulp-db-fields-encryption
-            - name: content-sources-pulp-settings
+                secretName: pulp-db-fields-encryption
+            - name: pulp-settings
               secret:
-                secretName: content-sources-pulp-settings
+                secretName: pulp-settings
 - apiVersion: v1
   kind: Service
   metadata:
     labels:
       app: pulp-api
-    name: cs-pulp-api-svc
+    name: pulp-api-svc
   spec:
     ports:
       - name: api-24817
@@ -392,7 +392,7 @@ objects:
         port: 24817
         targetPort: 24817
     selector:
-      pod: content-sources-pulp-api
+      pod: pulp-api
     sessionAffinity: None
     type: ClusterIP
   status:
@@ -402,7 +402,7 @@ objects:
   metadata:
     labels:
       app: pulp-content
-    name: cs-pulp-content-svc
+    name: pulp-content-svc
   spec:
     ports:
       - name: content-24816
@@ -410,7 +410,7 @@ objects:
         port: 24816
         targetPort: 24816
     selector:
-      pod: content-sources-pulp-content
+      pod: pulp-content
     sessionAffinity: None
     type: ClusterIP
   status:
@@ -420,8 +420,8 @@ objects:
   metadata:
     labels:
       otel: ""
-      pulp_cr: cs-pulp
-    name: cs-pulp-otel-collector-svc
+      pulp_cr: pulp
+    name: pulp-otel-collector-svc
   spec:
     ports:
       - name: otel-8889
@@ -437,7 +437,7 @@ objects:
         port: 4318
         targetPort: 4318
     selector:
-      pod: content-sources-pulp-otel-collector
+      pod: pulp-otel-collector
     sessionAffinity: None
     type: ClusterIP
   status:
@@ -446,10 +446,10 @@ objects:
   kind: ClowdJobInvocation
   metadata:
     labels:
-      app: content-sources-pulp
+      app: pulp
     name: migrations-12-14-2023
   spec:
-    appName: content-sources-pulp
+    appName: pulp
     runOnNotReady: True
     jobs:
       - migrate-db
@@ -458,15 +458,15 @@ objects:
   metadata:
     name: reset-admin-password
   spec:
-    appName: content-sources-pulp
+    appName: pulp
     jobs:
       - reset-admin-password
 - apiVersion: cloud.redhat.com/v1alpha1
   kind: ClowdJobInvocation
   metadata:
-    name: cs-pulp-create-settings-and-ingress
+    name: pulp-create-settings-and-ingress
   spec:
-    appName: content-sources-pulp
+    appName: pulp
     runOnNotReady: True
     jobs:
       - create-settings-and-ingress
@@ -476,7 +476,7 @@ parameters:
     required: true
   - name: IMAGE
     description: Specify which container image the operator will deploy as Pulp services.
-    value: quay.io/cloudservices/pulp-rpm-ubi
+    value: quay.io/cloudservices/pulp-ubi
   - name: IMAGE_TAG
     description: Specify the tag or hash for the image deployed by the operator.
     value: latest
@@ -545,7 +545,7 @@ parameters:
     value: "512Mi"
   - name: DB_SECRET_NAME
     description: Name of the secret with external database information for the operator.
-    value: "content-sources-pulp-external-database"
+    value: "pulp-external-database"
   - name: CONTENT_ORIGIN
     description: The value for the CONTENT_ORIGIN pulp setting
-    value: http://cs-pulp-content-svc.local
+    value: http://pulp-content-svc.local
