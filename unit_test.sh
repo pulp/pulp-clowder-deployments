@@ -33,7 +33,11 @@ cmd_stdin_prefix() {
 }
 ### END Adapted from ./.github/workflows/scripts/utils.sh
 
-cmd_prefix bash -c "HOME=/tmp/home pip3 install pulp-rpm-client pulp-file-client pytest"
+cmd_prefix bash -c "HOME=/tmp/home pip3 install pytest"
+cmd_prefix git clone https://github.com/mikedep333/pulp-openapi-scratch-builds.git /tmp/home/pulp-openapi-scratch-builds | /bin/true
+cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulpcore-client"
+cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_file-client"
+cmd_prefix bash -c "HOME=/tmp/home pip3 install -e /tmp/home/pulp-openapi-scratch-builds/pulp_rpm-client"
 
 cmd_prefix mkdir -p /tmp/home/.config/pulp_smash
 sed "s/password/${PASSWORD}/g" pulp-smash.json > pulp-smash.customized.json
